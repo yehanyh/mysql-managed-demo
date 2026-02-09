@@ -10,21 +10,21 @@ Service:
       RoleName: ${RoleName}
       SupplierTemplateConfigs:
         - Name: 单机版
-          Url: 'templates/template.yaml'
+          Url: 'ros_templates/template.yaml'
           PredefinedParameters:
             - Name: 低配版
-              Description: 该套餐采用了2vCPU 4GB内存的ECS实例（ecs.c6.large），并且绑定了SLB（slb.s1.small），满足基本的业务需求。
+              Description: 该套餐采用了2vCPU 4GB内存的ECS实例
               Parameters:
-                EcsInstanceType: ['ecs.c6.large']
+                EcsInstanceType: ['ecs.u1-c1m2.large']
                 SlbInstanceType: slb.s1.small
               Type: Normal
               OrderList:
                 - EcsInstanceType
                 - SlbInstanceType
             - Name: 基础版
-              Description: 该套餐采用了4vCPU 8GB内存的ECS实例（ecs.c6.xlarge），并且绑定了SLB（slb.s1.small），该配置可以满足大部分的业务需求。
+              Description: 该套餐采用了4vCPU 8GB内存的ECS实例
               Parameters:
-                EcsInstanceType: ['ecs.c6.xlarge']
+                EcsInstanceType: ['ecs.u1-c1m2.xlarge']
                 SlbInstanceType: slb.s1.small
               Type: Normal
               OrderList:
@@ -33,7 +33,7 @@ Service:
             - Name: 高配版
               Description: 该套餐采用了8vCPU 16GB内存的ECS实例（ecs.c6.2xlarge），并且绑定了SLB（slb.s3.small），该配置使用了更高规格ECS和SLB，进一步提升了架构的稳定性和性能。
               Parameters:
-                EcsInstanceType: ['ecs.c6.2xlarge']
+                EcsInstanceType: ['ecs.u1-c1m2.2xlarge']
                 SlbInstanceType: slb.s3.small
               Type: Normal
               OrderList:
@@ -44,6 +44,7 @@ Service:
             - SlbInstanceType
             - VpcId
             - VSwitchId
+            - ConfigParam
           ParameterMappings:
             - ParameterKey: RegionId
               ParameterMappingKeys:
@@ -62,35 +63,10 @@ Service:
                             VSwitchId: ${VSwitchId}
       FileArtifactRelation:
         '{{ computenest::file::MySQL }}':
-          ArtifactId: ${Artifact.Artifact_1.ArtifactId}
-          ArtifactVersion: ${Artifact.Artifact_1.ArtifactVersion}
+          ArtifactId: artifact-294b0a26e269458eb6b9
     TemplateConfigs:
       - Name: 单机版
-        Url: templates/parameters.yaml
-        AllowedRegions:
-          - cn-hangzhou
-        PredefinedParameters:
-        - Name: 低配版
-          Parameters: {}
-          Description: 该套餐采用了2vCPU 4GB内存的ECS实例（ecs.c6.large），并且绑定了SLB（slb.s1.small），满足基本的业务需求。
-          Type: Normal
-          OrderList:
-            - EcsInstanceType
-            - SlbInstanceType
-        - Name: 基础版
-          Parameters: {}
-          Description: 该套餐采用了4vCPU 8GB内存的ECS实例（ecs.c6.xlarge），并且绑定了SLB（slb.s1.small），该配置可以满足大部分的业务需求。
-          Type: Normal
-          OrderList:
-            - EcsInstanceType
-            - SlbInstanceType
-        - Name: 高配版
-          Parameters: {}
-          Description: 该套餐采用了8vCPU 16GB内存的ECS实例（ecs.c6.2xlarge），并且绑定了SLB（slb.s3.small），该配置使用了更高规格ECS和SLB，进一步提升了架构的稳定性和性能。
-          Type: Normal
-          OrderList:
-            - EcsInstanceType
-            - SlbInstanceType
+        ArchitectureDiagramUrl: 'docs/architecture.png'
     NetworkMetadata:
       EnablePrivateVpcConnection: true
       EnableReversePrivateVpcConnection: false
@@ -104,19 +80,82 @@ Service:
           DynamicTemplateParameterKey: Slb
           Payer: Endpoint
   ServiceType: managed
+  IsSupportOperated: true
+  PolicyNames: "AliyunComputeNestPolicyForTerminalLogin"
   OperationMetadata:
+    ParameterConfigs:
+      - TemplateName: 单机版
+        Parameters:
+          max_allowed_packet:
+            Type: String
+            Description: mysql服务器允许最大接收数的据包大小
+            Default: '16M'
+          max_connections:
+            Type: Number
+            Description: mysql最大连接数
+            Default: 512
+            ConstraintDescription: 256~1024
+            MaxValue: 1024
+            MinValue: 256
+          max_user_connections:
+            Type: Number
+            Default: 48
+            Description: mysql用户最大的连接数
+            ConstraintDescription: 32~64
+            MaxValue: 64
+            MinValue: 32
+          thread_cache_size:
+            Type: Number
+            Default: 16
+            Description: mysql线程缓存
+            AllowdValues: 
+              - 8
+              - 16
+              - 32
+              - 64
+        Metadata:
+          ParameterGroups:
+            - Parameters:
+                - max_allowed_packet
+                - max_connections
+                - max_user_connections
+                - thread_cache_size
+              TemplateParameter: ConfigParam
+              DefaultValue: |-
+                [mysqld]
+                datadir=/data1/mysql
+                socket=/data1/mysql/mysql.sock
+                max_allowed_packet  = 16M
+                max_connections  = 512
+                max_user_connections = 50
+                thread_cache_size = 16
+                symbolic-links=0
+                sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
+    
+                [mysqld_safe]
+                log-error=/var/log/mysqld.log
+                pid-file=/var/run/mysqld/mysqld.pid
+    
+                [client]
+                port=3306
+                socket=/data1/mysql/mysql.sock
+              Formatter: cnf
+              Name: Default
+              FormatterConfig:
+                SectionName: mysqld
     ModifyParametersConfig:
       - TemplateName: 单机版
         Operation:
           - Name: 网络变配
             Description: 网络变配支持VPC私网变更和自定义域名变更
             Type: Custom
-            SupportPredefinedParameters: false
             EnablePrivateVpcConnection: true
             EnablePrivateZoneName: true
-            EnableReversePrivateVpcConnection: false
-            EnableReversePrivateZoneName: false
-            EnableLogging: false
+          - Name: 磁盘容量扩容
+            Description: 扩容磁盘容量
+            Type: Upgrade
+            Parameters:
+              - DataDiskSize
     StatusOperationConfigs:
       - TemplateName: 单机版
         DeployScene: ECS
@@ -127,15 +166,7 @@ Service:
   ServiceInfo:
     Locale: zh-CN
     ShortDescription: mysql demo
-    Image: 'icons/service_logo.jpg'
+    Image: 'resources/icons/service_logo.jpg'
     Name: MySQL托管版beta1
   ShareType: Public
   ApprovalType: Manual
-Artifact:
-  Artifact_1:
-    ArtifactType: File
-    ArtifactName: MySQL
-    Description: MySQL
-    ArtifactProperty:
-      RegionId: cn-hangzhou
-      Url: 'artifacts/mysql-community-release-el6-5.noarch.rpm'
